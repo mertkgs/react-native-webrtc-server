@@ -81,18 +81,18 @@
       }, logError);
     }
 
-    pc.onnegotiationneeded = function () {
-      console.log('onnegotiationneeded');
-      if (isOffer) {
+    if (isOffer) {
+      pc.onnegotiationneeded = function () {
+        console.log('onnegotiationneeded');   
         createOffer();
-        dataChannel = pc.createDataChannel('chat');
-        createDataChannel();
       }
-      else {
-        pc.ondatachannel = event => {
-          dataChannel = event.channel;
-          createDataChannel();
-        }
+      dataChannel = pc.createDataChannel('chat');
+      createDataChannel();
+    }
+    else {
+      pc.ondatachannel = event => {
+        dataChannel = event.channel;
+        createDataChannel();
       }
     }
 
