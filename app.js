@@ -10,6 +10,7 @@ var serverPort = (process.env.PORT  || 4443);
 var https = require('https');
 var http = require('http');
 var server;
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 if (process.env.LOCAL) {
   server = https.createServer(options, app);
 } else {

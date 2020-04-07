@@ -15,7 +15,7 @@
   <video id="selfView" autoplay></video>
   <div id="remoteViewContainer"></div>
   <div id="roomIDContainer">
-    <input id="roomID" value="abc">
+    <input id="roomID" value="">
     <button onclick="press();">Join/Create room</button>
   </div>
 </body>
@@ -48,9 +48,11 @@ var remoteViewContainer = document.getElementById("remoteViewContainer");
 var localStream;
 
 function handleSuccess(stream) {
-  localStream = stream;    
-  selfView.srcObject = stream;
+  localStream = stream;
+  selfView.autoplay = true;
   selfView.muted = true;
+  selfView.playsInline = true;  
+  selfView.srcObject = stream;
 }
 
 function handleError(stream) {
@@ -113,7 +115,8 @@ function createPC(socketId, isOffer) {
   pc.ontrack = function (event) {
     console.log('onaddstream', event);
     element.id = "remoteView" + socketId;
-    element.autoplay = 'autoplay';
+    element.autoplay = true;
+    element.playsInline = true;
     element.srcObject = event.streams[0];
   };
   remoteViewContainer.appendChild(element);
