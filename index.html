@@ -85,13 +85,20 @@
       console.log('onnegotiationneeded');
       if (isOffer) {
         createOffer();
+        dataChannel = pc.createDataChannel('chat');
+        createDataChannel();
+      }
+      else {
+        pc.ondatachannel = event => {
+          dataChannel = event.channel;
+          createDataChannel();
+        }
       }
     }
 
     pc.oniceconnectionstatechange = function(event) {
       console.log('oniceconnectionstatechange', event);
       if (event.target.iceConnectionState === 'connected') {
-        createDataChannel();
       }
     };
     pc.onsignalingstatechange = function(event) {
@@ -109,8 +116,6 @@
     remoteViewContainer.appendChild(element);
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     function createDataChannel() {
-      var dataChannel = pc.createDataChannel("text");
-
       dataChannel.onerror = function (error) {
         console.log("dataChannel.onerror", error);
       };
