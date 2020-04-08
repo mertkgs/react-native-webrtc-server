@@ -1,158 +1,167 @@
 var socket = io();
 
-  var RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection || window.msRTCPeerConnection;
-  var RTCSessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription || window.msRTCSessionDescription;
-  navigator.getUserMedia = navigator.getUserMedia || navigator.mozGetUserMedia || navigator.webkitGetUserMedia || navigator.msGetUserMedia;
+var RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection || window.msRTCPeerConnection;
+var RTCSessionDescription = window.RTCSessionDescription || window.mozRTCSessionDescription || window.webkitRTCSessionDescription || window.msRTCSessionDescription;
+navigator.getUserMedia = navigator.getUserMedia || navigator.mozGetUserMedia || navigator.webkitGetUserMedia || navigator.msGetUserMedia;
 
-  var configuration = {"iceServers": [{"urls": "stun:stun.l.google.com:19302"}]};
+var configuration = {"iceServers": [{"urls": "stun:stun.l.google.com:19302"}]};
 
-  var pcPeers = {};
-  var selfView = document.getElementById("selfView");
-  var remoteViewContainer = document.getElementById("remoteViewContainer");
-  var localStream;
+var pcPeers = {};
+var selfView = document.getElementById("selfView");
+var remoteViewContainer = document.getElementById("remoteViewContainer");
+var localStream;
 
-  function handleSuccess(stream) {
-    localStream = stream;
-    selfView.autoplay = true;
-    selfView.muted = true;
-    selfView.playsInline = true;  
-    selfView.srcObject = stream;
+function handleSuccess(stream) {
+  localStream = stream;
+  selfView.autoplay = true;
+  selfView.muted = true;
+  selfView.playsInline = true;  
+  selfView.srcObject = stream;
+
+  if ('URLSearchParams' in window) {
+    var searchParams = new URLSearchParams(window.location.search);
+    if(searchParams.has("roomID")) {
+      document.getElementById('roomID').value = searchParams.get("roomID");
+      press();
+    }
   }
 
-  function handleError(stream) {
+}
 
-  }
+function handleError(stream) {
 
-  function getLocalStream() {
-    navigator.mediaDevices.getUserMedia({ "audio": true, "video": true }).then(handleSuccess).catch(handleError);
-  }
+}
 
-  function join(roomID) {
-    socket.emit('join', roomID, function(socketIds){
-      console.log('join', socketIds);
-      for (var i in socketIds) {
-        var socketId = socketIds[i];
-        createPC(socketId, true);
-      }
-    });
-  }
+function getLocalStream() {
+  navigator.mediaDevices.getUserMedia({ "audio": true, "video": true }).then(handleSuccess).catch(handleError);
+}
 
-  function createPC(socketId, isOffer) {
-    var pc = new RTCPeerConnection(configuration);
-    pcPeers[socketId] = pc;
-
-    pc.onicecandidate = function (event) {
-      console.log('onicecandidate', event);
-      if (event.candidate) {
-        socket.emit('exchange', {'to': socketId, 'candidate': event.candidate });
-      }
-    };
-
-    function createOffer() {
-      pc.createOffer().then(function(desc) {
-        console.log('createOffer', desc);
-        return pc.setLocalDescription(desc).then(function () {
-          console.log('setLocalDescription', pc.localDescription);
-          socket.emit('exchange', {'to': socketId, 'sdp': pc.localDescription });
-        }, logError);
-      }, logError);
+function join(roomID) {
+  socket.emit('join', roomID, function(socketIds){
+    console.log('join', socketIds);
+    for (var i in socketIds) {
+      var socketId = socketIds[i];
+      createPC(socketId, true);
     }
+  });
+}
 
-    if (isOffer) {
-      pc.onnegotiationneeded = function () {
-        console.log('onnegotiationneeded');   
-        createOffer();
-      }
-      dataChannel = pc.createDataChannel('chat');
-      createDataChannel();
+function createPC(socketId, isOffer) {
+  var pc = new RTCPeerConnection(configuration);
+  pcPeers[socketId] = pc;
+
+  pc.onicecandidate = function (event) {
+    console.log('onicecandidate', event);
+    if (event.candidate) {
+      socket.emit('exchange', {'to': socketId, 'candidate': event.candidate });
     }
-    else {
-      pc.ondatachannel = event => {
-        dataChannel = event.channel;
-        createDataChannel();
-      }
-    }
+  };
 
-    pc.oniceconnectionstatechange = function(event) {
-      console.log('oniceconnectionstatechange', event);
-      if (event.target.iceConnectionState === 'connected') {
-      }
-    };
-    pc.onsignalingstatechange = function(event) {
-      console.log('onsignalingstatechange', event);
-    };
-
-    var element = document.createElement('video');
-    pc.ontrack = function (event) {
-      console.log('onaddstream', event);
-      element.id = "remoteView" + socketId;
-      element.autoplay = true;
-      element.playsInline = true;
-      element.srcObject = event.streams[0];
-    };
-    remoteViewContainer.appendChild(element);
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    function createDataChannel() {
-      dataChannel.onerror = function (error) {
-        console.log("dataChannel.onerror", error);
-      };
-
-      dataChannel.onmessage = function (event) {
-        console.log("dataChannel.onmessage:", event.data);
-        var content = document.getElementById('textRoomContent');
-        content.innerHTML = content.innerHTML + '<p>' + socketId + ': ' + event.data + '</p>';
-      };
-
-      dataChannel.onopen = function () {
-        console.log('dataChannel.onopen');
-        var textRoom = document.getElementById('textRoom');
-        textRoom.style.display = "block";
-      };
-
-      dataChannel.onclose = function () {
-        console.log("dataChannel.onclose");
-      };
-
-      pc.textDataChannel = dataChannel;
-    }
-    return pc;
-  }
-
-
-  function exchange(data) {
-    var fromId = data.from;
-    var pc;
-    if (fromId in pcPeers) {
-      pc = pcPeers[fromId];
-    } else {
-      pc = createPC(fromId, false);
-    }
-
-    function createMyStream() {
-     if (pc.remoteDescription.type == "offer") {
-       pc.createAnswer().then(function(desc) {
-         console.log('createAnswer', desc);
-         pc.setLocalDescription(desc);
-       })
-       .then(function () {
+  function createOffer() {
+    pc.createOffer().then(function(desc) {
+      console.log('createOffer', desc);
+      return pc.setLocalDescription(desc).then(function () {
         console.log('setLocalDescription', pc.localDescription);
-        socket.emit('exchange', {'to': fromId, 'sdp': pc.localDescription });
-      })
-       .catch()
-     }
-   }
+        socket.emit('exchange', {'to': socketId, 'sdp': pc.localDescription });
+      }, logError);
+    }, logError);
+  }
 
-   if (data.sdp) {
-    console.log('exchange sdp', data);
-    pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
-    .then(function () {
-      return createMyStream();
-    })
+  if (isOffer) {
+    pc.onnegotiationneeded = function () {
+      console.log('onnegotiationneeded');   
+      createOffer();
+    }
+    dataChannel = pc.createDataChannel('chat');
+    createDataChannel();
   }
   else {
-    console.log('exchange candidate', data);
-    pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+    pc.ondatachannel = event => {
+      dataChannel = event.channel;
+      createDataChannel();
+    }
   }
+
+  pc.oniceconnectionstatechange = function(event) {
+    console.log('oniceconnectionstatechange', event);
+    if (event.target.iceConnectionState === 'connected') {
+    }
+  };
+  pc.onsignalingstatechange = function(event) {
+    console.log('onsignalingstatechange', event);
+  };
+
+  var element = document.createElement('video');
+  pc.ontrack = function (event) {
+    console.log('onaddstream', event);
+    element.id = "remoteView" + socketId;
+    element.autoplay = true;
+    element.playsInline = true;
+    element.srcObject = event.streams[0];
+  };
+  remoteViewContainer.appendChild(element);
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  function createDataChannel() {
+    dataChannel.onerror = function (error) {
+      console.log("dataChannel.onerror", error);
+    };
+
+    dataChannel.onmessage = function (event) {
+      console.log("dataChannel.onmessage:", event.data);
+      var content = document.getElementById('textRoomContent');
+      content.innerHTML = content.innerHTML + '<p>' + socketId + ': ' + event.data + '</p>';
+    };
+
+    dataChannel.onopen = function () {
+      console.log('dataChannel.onopen');
+      var textRoom = document.getElementById('textRoom');
+      textRoom.style.display = "block";
+    };
+
+    dataChannel.onclose = function () {
+      console.log("dataChannel.onclose");
+    };
+
+    pc.textDataChannel = dataChannel;
+  }
+  return pc;
+}
+
+
+function exchange(data) {
+  var fromId = data.from;
+  var pc;
+  if (fromId in pcPeers) {
+    pc = pcPeers[fromId];
+  } else {
+    pc = createPC(fromId, false);
+  }
+
+  function createMyStream() {
+   if (pc.remoteDescription.type == "offer") {
+     pc.createAnswer().then(function(desc) {
+       console.log('createAnswer', desc);
+       pc.setLocalDescription(desc);
+     })
+     .then(function () {
+      console.log('setLocalDescription', pc.localDescription);
+      socket.emit('exchange', {'to': fromId, 'sdp': pc.localDescription });
+    })
+     .catch()
+   }
+ }
+
+ if (data.sdp) {
+  console.log('exchange sdp', data);
+  pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
+  .then(function () {
+    return createMyStream();
+  })
+}
+else {
+  console.log('exchange candidate', data);
+  pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+}
 }
 
 function leave(socketId) {
@@ -185,6 +194,14 @@ function press() {
   if (roomID == "") {
     alert('Please enter room ID');
   } else {
+    if ('URLSearchParams' in window) {
+      var searchParams = new URLSearchParams(window.location.search);
+      if(!searchParams.has("roomID")) {
+        searchParams.set("roomID", roomID);
+        window.location.search = searchParams.toString();
+      }
+    }
+
     var roomIDContainer = document.getElementById('roomIDContainer');
     roomIDContainer.parentElement.removeChild(roomIDContainer);
     join(roomID);
