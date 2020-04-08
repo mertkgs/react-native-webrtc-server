@@ -20,6 +20,9 @@ var io = require('socket.io')(server);
 
 var roomList = {};
 
+//Middleware
+app.use(express.static(__dirname + '/public' ));
+
 app.get('/', function(req, res){
   console.log('get /');
   res.sendFile(__dirname + '/index.html');
