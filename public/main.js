@@ -128,39 +128,44 @@ function createPC(socketId, isOffer) {
 }
 
 
-function exchange(data) {
-  var fromId = data.from;
-  var pc;
-  if (fromId in pcPeers) {
-    pc = pcPeers[fromId];
-  } else {
-    pc = createPC(fromId, false);
-  }
+async function exchange(data) {
+  try {
+    var fromId = data.from;
+    var pc;
+    if (fromId in pcPeers) {
+      pc = pcPeers[fromId];
+    } else {
+      pc = createPC(fromId, false);
+    }
 
-  function createMyStream() {
-   if (pc.remoteDescription.type == "offer") {
-     pc.createAnswer().then(function(desc) {
-       console.log('createAnswer', desc);
-       pc.setLocalDescription(desc);
-     })
-     .then(function () {
-      console.log('setLocalDescription', pc.localDescription);
-      socket.emit('exchange', {'to': fromId, 'sdp': pc.localDescription });
-    })
-     .catch()
+    async function createMyStream() {
+     if (pc.remoteDescription.type == "offer") {
+       pc.createAnswer().then(async function(desc) {
+         console.log('createAnswer', desc);
+         await pc.setLocalDescription(desc);
+       })
+       .then(function () {
+        console.log('setLocalDescription', pc.localDescription);
+        socket.emit('exchange', {'to': fromId, 'sdp': pc.localDescription });
+      })
+       .catch()
+     }
    }
- }
 
- if (data.sdp) {
-  console.log('exchange sdp', data);
-  pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
-  .then(function () {
-    return createMyStream();
-  })
+   if (data.sdp) {
+    console.log('exchange sdp', data);
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp))
+    .then(function () {
+      return createMyStream();
+    })
+  }
+  else {
+    console.log('exchange candidate', data);
+    await pc.addIceCandidate(data.candidate);
+  }
 }
-else {
-  console.log('exchange candidate', data);
-  pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+catch(err) {
+  console.error(err);
 }
 }
 
